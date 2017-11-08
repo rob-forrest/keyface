@@ -43,102 +43,97 @@ def main():
     data_all = pd.read_csv('training_sample.csv')
     # plot_faces(data)
     # print(data_all.head())
+    output_size = 2
+    #train_n = len(data_all)
+    train_n = 500
 
-    data = np.zeros((len(data_all), 96*96))
-    labels = np.zeros((len(data_all), 1))
+
+    data = np.zeros((train_n, 96*96))
+    labels = np.zeros((train_n, output_size))
     # print len(labels)
-    for i, pic in enumerate(data_all['Image']):
+    for i, pic in enumerate(data_all['Image'][0:train_n]):
         image1 = pic.split(' ')
         image1 = [int(x) for x in image1]
         data[i] = np.array(image1)
-        #print("data size = " + data.shape)
+        # print("data size = " + data.shape)
 
-        # labels[i] = np.float32((np.mean(data[i]) > 128))
-        labels[i] = np.float32(data[i][0] > 128)
+    #        labels[i] = np.float32((np.mean(data[i]) > 128))
+        labels[i][0] = data_all.ix[i]['left_eye_center_x']
+        labels[i][1] = data_all.ix[i]['left_eye_center_y']
+        # labels[i] = np.float32(data[i][0] > 128)
         # print(data[i][0])
         # labels[i] = data_all['nose_tip_x'][i]
+    data /= 255.  # Normalize the data between [0,1]
 
     # print(data)
     # print(labels)
 
-    index_train = range(int(2*len(data_all)/3))
-    index_test = range(int(2*len(data_all)/3), len(data_all))
-    #index_train = range(len(data_all)-1)
-    #index_test = [len(data_all)-1]
-    #print test
-    #print train
+    index_train = range(int(2*train_n/3))
+    index_test = range(int(2*train_n/3), train_n)
+    # index_train = range(len(data_all)-1)
+    # index_test = [len(data_all)-1]
 
     reset_tf()
 
-    x = tf.placeholder(tf.float32, [None, 96*96], name="features")
-    y_label = tf.placeholder(tf.float32, [None, 1], name="labels")
+    hidden_size = 500
 
-    hidden_size = 2
+
+    x = tf.placeholder(tf.float32, [None, 96*96], name="features")
+    y_label = tf.placeholder(tf.float32, [None, output_size], name="labels")
 
     W1 = tf.Variable(tf.random_normal([96*96, hidden_size], seed=42), name="weight1")
     b1 = tf.Variable(tf.zeros([hidden_size]), name="bias1")
 
-    hidden = tf.nn.sigmoid(tf.matmul(x, W1) + b1, name="hidden")
+    hidden = tf.nn.relu(tf.matmul(x, W1) + b1, name="hidden")
     # hidden = tf.matmul(x, W1) + b1
 
-    W2 = tf.Variable(tf.random_normal([hidden_size, 1], seed=24), name="weight2")
+    W2 = tf.Variable(tf.random_normal([hidden_size, output_size], seed=24), name="weight2")
     b2 = tf.Variable(tf.zeros([1]), name="bias2")
 
     y = tf.matmul(hidden, W2) + b2
 
-    loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=y, labels=y_label))
-    # loss = tf.reduce_mean(y - y_label)
-    train = tf.train.GradientDescentOptimizer(0.5).minimize(loss)
-    predicted = tf.cast(tf.nn.sigmoid(y) > 0.5, np.float32)
-    # predicted = tf.cast(y > 0.5, np.float32)
-    accuracy = tf.reduce_mean(tf.cast(tf.equal(predicted, y_label), np.float32))
+    # loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=y, labels=y_label))
+    loss = tf.reduce_mean(tf.square(y - y_label))
+    train = tf.train.GradientDescentOptimizer(0.1).minimize(loss)
+    # predicted = tf.cast(tf.nn.sigmoid(y) > 0.5, np.float32)
+    accuracy = tf.reduce_mean(tf.square(y - y_label))
 
     reset_vars()
 
-    #print(sess.run(W))
-
     print "loss, accuracy during training"
-    for i in range(600):
+    for i in range(100):
         sess.run(train, feed_dict={x: data[index_train], y_label: labels[index_train]})
         if i % 30 == 0:
             print sess.run([loss, accuracy], feed_dict={x: data[index_train], y_label: labels[index_train]})
             # print ('y, y_label')
             # print sess.run([y, y_label])
+        elif i == 1:
+            print "Starting performance:" , sess.run([loss, accuracy], feed_dict={x: data[index_train], y_label: labels[index_train]})
 
     print "loss, accuracy on test data"
-    print sess.run([loss, accuracy, predicted], feed_dict={x: data[index_test], y_label: labels[index_test]})
-    #print sess.run(predicted)
-    #print index_test
-    #print labels[index_test]
-    #print len(labels)
-
-
-
-    # print("W = ")
-    # print(sess.run(W))
-    # print("b = ")
-    # print(sess.run(b))
+    print sess.run([loss, accuracy], feed_dict={x: data[index_test], y_label: labels[index_test]})
+    # print sess.run(predicted)
+    # print index_test
+    # print labels[index_test]
+    # print len(labels)
+    print  "W2 = "
+    print sess.run(W2)
+    print "b = "
+    print(sess.run(b2))
     # print("min W = ")
     # print(sess.run(np.min(W[0])))
     # print(sess.run(np.min(np.array(W).flatten())))
     # print("max W = ")
     # print(sess.run(np.max(np.array(W).flatten())))
 
-    W = sess.run(W)
+#    W = sess.run(W)
     # print(W)
-    print('min W = ')
-    print(np.min(W.flatten()))
-    print(np.argmin(W.flatten()))
-    print('max W = ')
-    print(np.max(W.flatten()))
-    print(np.argmax(W.flatten()))
-
-
-
-
-
-
-
+#    print('min W = ')
+#    print(np.min(W.flatten()))
+#    print(np.argmin(W.flatten()))
+#    print('max W = ')
+#    print(np.max(W.flatten()))
+#    print(np.argmax(W.flatten()))
 
 if __name__ == "__main__":
     main()
