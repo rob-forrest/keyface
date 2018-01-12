@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 # import seaborn as sns
 import tensorflow as tf
-
+from matplotlib import pyplot
 
 global sess
 
@@ -25,6 +25,23 @@ def plot_faces(data):
         image1 = np.array(image1)
         plt.imshow(image1.reshape((96, 96)), cmap=plt.cm.gray)
         plt.savefig('images/image'+ str(i) +'.jpg')
+
+def plot_sample(x, y, axis):
+    """
+    Plots a single sample image with keypoints on top.
+
+    Parameters
+    ----------
+    x     :
+            Image data.
+    y     :
+            Keypoints to plot.
+    axis  :
+            Plot over which to draw the sample.
+    """
+    img = x.reshape(96, 96)
+    axis.imshow(img, cmap='gray')
+    axis.scatter(y[0::2] * 48 + 48, y[1::2] * 48 + 48, marker='x', s=10)
 
 def reset_vars():
     sess.run(tf.global_variables_initializer())
@@ -43,13 +60,17 @@ def main():
     data_all = pd.read_csv('training_sample.csv')
     # plot_faces(data)
     # print(data_all.head())
-    output_size = 2
+    num_keypoints = 6
     #train_n = len(data_all)
-    train_n = 500
+    train_n = 200
 
+    # Some columns have NA values.
+    #data_all = data_all.dropna()
 
+    # Normalize the non-picture parts (labels) to [-1,1]
+    data_all[data_all.columns[:-1]] = (data_all[data_all.columns[:-1]] - 48) / 48
     data = np.zeros((train_n, 96*96))
-    labels = np.zeros((train_n, output_size))
+    labels = np.zeros((train_n, num_keypoints))
     # print len(labels)
     for i, pic in enumerate(data_all['Image'][0:train_n]):
         image1 = pic.split(' ')
@@ -60,6 +81,10 @@ def main():
     #        labels[i] = np.float32((np.mean(data[i]) > 128))
         labels[i][0] = data_all.ix[i]['left_eye_center_x']
         labels[i][1] = data_all.ix[i]['left_eye_center_y']
+        labels[i][2] = data_all.ix[i]['right_eye_center_x']
+        labels[i][3] = data_all.ix[i]['right_eye_center_y']
+        labels[i][4] = data_all.ix[i]['nose_tip_y']
+        labels[i][5] = data_all.ix[i]['nose_tip_x']
         # labels[i] = np.float32(data[i][0] > 128)
         # print(data[i][0])
         # labels[i] = data_all['nose_tip_x'][i]
@@ -70,70 +95,69 @@ def main():
 
     index_train = range(int(2*train_n/3))
     index_test = range(int(2*train_n/3), train_n)
-    # index_train = range(len(data_all)-1)
-    # index_test = [len(data_all)-1]
+
 
     reset_tf()
 
-    hidden_size = 500
-
+    hidden_size = 100
 
     x = tf.placeholder(tf.float32, [None, 96*96], name="features")
-    y_label = tf.placeholder(tf.float32, [None, output_size], name="labels")
+    y_label = tf.placeholder(tf.float32, [None, num_keypoints], name="labels")
 
-    W1 = tf.Variable(tf.random_normal([96*96, hidden_size], seed=42), name="weight1")
-    b1 = tf.Variable(tf.zeros([hidden_size]), name="bias1")
+    W1 = tf.get_variable('weight1',
+                    shape=[96*96, hidden_size],
+                    initializer=tf.contrib.layers.xavier_initializer(seed=42))
+    b1 = tf.get_variable("bias1", shape=[hidden_size], initializer=tf.constant_initializer(0.0))
 
-    hidden = tf.nn.relu(tf.matmul(x, W1) + b1, name="hidden")
+    #hidden = tf.nn.relu(tf.matmul(x, W1) + b1 , name="hidden")
+    hidden = tf.nn.sigmoid(tf.matmul(x, W1) + b1 , name="hidden")
+
     # hidden = tf.matmul(x, W1) + b1
 
-    W2 = tf.Variable(tf.random_normal([hidden_size, output_size], seed=24), name="weight2")
-    b2 = tf.Variable(tf.zeros([1]), name="bias2")
+    W2 = tf.get_variable("weight2", shape=[hidden_size, num_keypoints],
+                         initializer=tf.contrib.layers.xavier_initializer(seed=42))
+    b2 = tf.get_variable("bias2", shape=[num_keypoints], initializer=tf.constant_initializer(0.0))
 
     y = tf.matmul(hidden, W2) + b2
 
     # loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=y, labels=y_label))
     loss = tf.reduce_mean(tf.square(y - y_label))
-    train = tf.train.GradientDescentOptimizer(0.1).minimize(loss)
+
+    #train = tf.train.GradientDescentOptimizer(0.01).minimize(loss)
     # predicted = tf.cast(tf.nn.sigmoid(y) > 0.5, np.float32)
-    accuracy = tf.reduce_mean(tf.square(y - y_label))
+    # Optimizer.
+    optimizer = tf.train.MomentumOptimizer(
+        learning_rate=0.01,
+        momentum=0.9,
+        use_nesterov=True
+    ).minimize(loss)
+
 
     reset_vars()
 
     print "loss, accuracy during training"
-    for i in range(100):
-        sess.run(train, feed_dict={x: data[index_train], y_label: labels[index_train]})
-        if i % 30 == 0:
-            print sess.run([loss, accuracy], feed_dict={x: data[index_train], y_label: labels[index_train]})
+    for i in range(500):
+        sess.run([optimizer], feed_dict={x: data[index_train], y_label: labels[index_train]})
+        if i % 10 == 0:
+            #print sess.run([hidden[0]], feed_dict={x: data[index_test][0:2]})
+            print sess.run([loss], feed_dict={x: data[index_train], y_label: labels[index_train]})
             # print ('y, y_label')
             # print sess.run([y, y_label])
-        elif i == 1:
-            print "Starting performance:" , sess.run([loss, accuracy], feed_dict={x: data[index_train], y_label: labels[index_train]})
+        if i == 1:
+            print "Starting performance:" , sess.run([loss], feed_dict={x: data[index_train], y_label: labels[index_train]})
 
-    print "loss, accuracy on test data"
-    print sess.run([loss, accuracy], feed_dict={x: data[index_test], y_label: labels[index_test]})
-    # print sess.run(predicted)
-    # print index_test
-    # print labels[index_test]
-    # print len(labels)
-    print  "W2 = "
-    print sess.run(W2)
-    print "b = "
-    print(sess.run(b2))
-    # print("min W = ")
-    # print(sess.run(np.min(W[0])))
-    # print(sess.run(np.min(np.array(W).flatten())))
-    # print("max W = ")
-    # print(sess.run(np.max(np.array(W).flatten())))
+    print sess.run([y], feed_dict={x: data[index_test][0:2]})
 
-#    W = sess.run(W)
-    # print(W)
-#    print('min W = ')
-#    print(np.min(W.flatten()))
-#    print(np.argmin(W.flatten()))
-#    print('max W = ')
-#    print(np.max(W.flatten()))
-#    print(np.argmax(W.flatten()))
+    pred = []
+    [p_batch] = sess.run([y], feed_dict={ x: data[0:100]})
+
+    pred.extend(p_batch)
+    fig = pyplot.figure(figsize=(2, 2))
+
+    for i in range(9):
+        ax = fig.add_subplot(3, 3, i + 1, xticks=[], yticks=[])
+        plot_sample(data[i], pred[i], ax)
+    pyplot.show()
 
 if __name__ == "__main__":
     main()
