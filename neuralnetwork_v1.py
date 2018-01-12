@@ -60,7 +60,7 @@ def main():
     data_all = pd.read_csv('training_sample.csv')
     # plot_faces(data)
     # print(data_all.head())
-    num_keypoints = 6
+    num_keypoints = 10
     #train_n = len(data_all)
     train_n = 200
 
@@ -78,20 +78,22 @@ def main():
         data[i] = np.array(image1)
         # print("data size = " + data.shape)
 
-    #        labels[i] = np.float32((np.mean(data[i]) > 128))
         labels[i][0] = data_all.ix[i]['left_eye_center_x']
         labels[i][1] = data_all.ix[i]['left_eye_center_y']
         labels[i][2] = data_all.ix[i]['right_eye_center_x']
         labels[i][3] = data_all.ix[i]['right_eye_center_y']
         labels[i][4] = data_all.ix[i]['nose_tip_y']
         labels[i][5] = data_all.ix[i]['nose_tip_x']
+        labels[i][6] = data_all.ix[i]['mouth_right_corner_x']
+        labels[i][7] = data_all.ix[i]['mouth_right_corner_y']
+        labels[i][8] = data_all.ix[i]['mouth_left_corner_x']
+        labels[i][9] = data_all.ix[i]['mouth_left_corner_y']
+
+
         # labels[i] = np.float32(data[i][0] > 128)
         # print(data[i][0])
         # labels[i] = data_all['nose_tip_x'][i]
     data /= 255.  # Normalize the data between [0,1]
-
-    # print(data)
-    # print(labels)
 
     index_train = range(int(2*train_n/3))
     index_test = range(int(2*train_n/3), train_n)
@@ -99,13 +101,12 @@ def main():
 
     reset_tf()
 
-    hidden_size = 100
+    hidden_size = 300
 
     x = tf.placeholder(tf.float32, [None, 96*96], name="features")
     y_label = tf.placeholder(tf.float32, [None, num_keypoints], name="labels")
 
-    W1 = tf.get_variable('weight1',
-                    shape=[96*96, hidden_size],
+    W1 = tf.get_variable('weight1',shape=[96*96, hidden_size],
                     initializer=tf.contrib.layers.xavier_initializer(seed=42))
     b1 = tf.get_variable("bias1", shape=[hidden_size], initializer=tf.constant_initializer(0.0))
 
